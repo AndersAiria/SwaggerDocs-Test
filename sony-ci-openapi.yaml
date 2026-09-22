@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Sony Ci Media Cloud (curated)
+  title: Sony Ci
   version: "1.0.0"
   description: >
     A deliberately curated subset of the Sony Ci Media Cloud REST API, authored for use

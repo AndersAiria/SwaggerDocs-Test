@@ -13,7 +13,8 @@ publishes a static document; Airia runs the server.
 | `sony-ci-openapi.yaml` | A curated 14-operation subset of the Sony Ci Media Cloud REST API |
 | `sony-ci-openapi-SLOPPY.yaml` | The same spec with eight deliberate faults. Airia verifies it anyway |
 | `sony-ci-openapi-FATAL.yaml` | Unparseable YAML — one of the few things that genuinely fails |
-| `validate_openapi.py` | Pre-flight validator — run before registering a spec |
+| `validate_openapi.py` | Pre-flight checker — blockers vs quality issues |
+| `preview_tools.py` | Renders the exact tool list Airia will show, before you upload |
 
 ## Raw URLs
 
@@ -84,6 +85,20 @@ One consequence worth knowing: the tool **name** is generated from the HTTP meth
 not from `operationId`. The `operationId`, `summary` and `description` are concatenated into the
 tool **description**. Descriptions are therefore the field that determines whether an agent uses
 the API well.
+
+## Previewing the tool list
+
+`preview_tools.py` reimplements the converter's tool generation, so it shows the names,
+descriptions and arguments Airia will display, before you register anything:
+
+```bash
+python3 preview_tools.py sony-ci-openapi.yaml
+```
+
+Worth knowing: the tool name is built as `mcplink_<title>_<method>_<path>`, and the sanitizer
+does **not** strip parentheses. A title like `Sony Ci Media Cloud (curated)` produces names
+containing `(curated)` and pushes most of them past the 64-character limit many MCP clients
+enforce. Keep `info.title` short and alphanumeric.
 
 ## Notes for registering a spec in Airia
 
