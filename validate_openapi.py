@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
 """
-Pre-flight validator for an OpenAPI YAML destined to become an Airia custom MCP server.
+Quality checker for an OpenAPI YAML destined to become an Airia custom MCP server.
 
-Run this BEFORE handing the spec to the security team. It catches the class of problem
-that otherwise only surfaces when security uploads the file and it fails to deploy.
+IMPORTANT - what this tool is and is not.
+
+Airia's OpenAPI servers are built by mcp-link, which is extremely permissive. Verified
+against its source on 2026-09-22: it does not check the openapi version, does not require
+operationId, does not detect duplicate operationIds, does not cross-check path parameters,
+and never reads securitySchemes. It also takes the upstream base URL from Airia's form
+rather than the spec's servers block. A spec can therefore be badly wrong by OpenAPI's
+rules and still verify in Airia and produce working tools.
+
+So the findings below are split:
+
+  BLOCKER  - mcp-link cannot build a server from this. Airia's probe fails.
+  QUALITY  - Airia will accept this happily. The resulting tools are worse for it,
+             which an agent pays for at runtime and a reviewer pays for at review time.
+
+Most real faults are QUALITY. That is the uncomfortable and useful finding: passing
+Airia's verification is a low bar, and it is not a substitute for reading the tool list.
 
     python3 validate_openapi.py sony-ci-openapi.yaml
 
@@ -17,12 +32,13 @@ try:
 except ImportError:
     sys.exit("PyYAML is required:  pip install pyyaml")
 
-ERRORS, WARNINGS, NOTES = [], [], []
+BLOCKERS, QUALITY, NOTES = [], [], []
+ERRORS, WARNINGS = BLOCKERS, QUALITY   # back-compat aliases
 DESTRUCTIVE_HINTS = ("delete", "purge", "remove", "destroy", "trash", "archive", "wipe")
 EGRESS_HINTS = ("download", "export", "share", "publish")
 
-def err(m):  ERRORS.append(m)
-def warn(m): WARNINGS.append(m)
+def err(m):  BLOCKERS.append(m)
+def warn(m): QUALITY.append(m)
 def note(m): NOTES.append(m)
 
 
@@ -66,9 +82,12 @@ def main(path):
     # 2. OpenAPI version
     ver = str(spec.get("openapi", ""))
     if not ver:
-        err("No 'openapi:' version key. Airia expects an OpenAPI v3 document, not Swagger 2.")
+        warn("No 'openapi:' version key. mcp-link never reads it, so this does not block "
+             "anything, but it signals the document was not written to a version.")
     elif not ver.startswith("3."):
-        err(f"openapi version is '{ver}'. Airia's spec-to-MCP adapter expects 3.x.")
+        warn(f"openapi version is '{ver}', not 3.x. mcp-link does not check the version "
+             f"field, so this still deploys - but a 2.0-shaped document will have other "
+             f"structural differences that do bite.")
 
     # 3. info
     info = spec.get("info") or {}
@@ -80,8 +99,9 @@ def main(path):
     # 4. servers - the single most common cause of a spec that parses but cannot call anything
     servers = spec.get("servers") or []
     if not servers:
-        err("No 'servers:' block. Without an absolute base URL the generated tools have "
-            "nowhere to send requests.")
+        warn("No 'servers:' block. Airia takes the upstream base URL from its own form "
+             "field, so this does NOT block deployment - but nothing in the file records "
+             "which API it describes.")
     else:
         for s in servers:
             u = (s or {}).get("url", "")
@@ -91,9 +111,11 @@ def main(path):
                 warn(f"servers.url '{u}' is plain HTTP, not HTTPS.")
 
     # 5. paths and operations
-    paths = spec.get("paths") or {}
-    if not paths:
-        err("No 'paths:' - the document describes zero operations.")
+    paths = spec.get("paths")
+    if not isinstance(paths, dict) or not paths:
+        err("No usable 'paths:' mapping - mcp-link returns zero endpoints, so the server "
+            "deploys with no tools at all.")
+        paths = {}
 
     METHODS = ("get", "post", "put", "delete", "patch", "head", "options")
     seen_ids, ops = {}, []
@@ -117,23 +139,27 @@ def main(path):
             # operationId -> becomes the MCP tool name
             oid = op.get("operationId")
             if not oid:
-                err(f"{label} has no operationId. Airia names the MCP tool from it; "
-                    f"without one the tool is unnamed or auto-generated.")
+                warn(f"{label} has no operationId. mcp-link builds the tool NAME from the "
+                     f"method and path regardless, so this deploys - but operationId is "
+                     f"prepended to the tool description, so the model loses a useful hint.")
             else:
                 if oid in seen_ids:
-                    err(f"Duplicate operationId '{oid}' on {label} and {seen_ids[oid]}. "
-                        f"Two MCP tools cannot share a name.")
+                    warn(f"Duplicate operationId '{oid}' on {label} and {seen_ids[oid]}. "
+                         f"Tool names come from method+path so they will not collide, but "
+                         f"two tools now carry the same hint in their descriptions.")
                 seen_ids[oid] = label
                 if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", oid):
-                    err(f"operationId '{oid}' on {label} is not a usable tool name "
-                        f"(letters/digits/underscore/hyphen, must start with a letter, max 64).")
+                    warn(f"operationId '{oid}' on {label} is oddly formed. It lands in the "
+                         f"tool description rather than the name, so this is cosmetic.")
 
             # description -> becomes the tool description the model reads when choosing
             desc = (op.get("description") or "").strip()
             summ = (op.get("summary") or "").strip()
             if not desc and not summ:
-                err(f"{label} has neither summary nor description. The model has nothing "
-                    f"to decide on and will misuse or ignore the tool.")
+                warn(f"{label} has neither summary nor description. This is the single most "
+                     f"damaging quality fault: mcp-link concatenates operationId, summary and "
+                     f"description into the tool description, so the model gets almost nothing "
+                     f"to decide on and will misuse or ignore the tool.")
             elif not desc:
                 warn(f"{label} has a summary but no description. Descriptions are what the "
                      f"model actually reasons over.")
@@ -149,28 +175,32 @@ def main(path):
                     elif prm.get("in") == "path":
                         declared.add(prm.get("name"))
                         if not prm.get("required"):
-                            err(f"{label} path parameter '{prm.get('name')}' must be "
-                                f"required: true.")
+                            warn(f"{label} path parameter '{prm.get('name')}' is not marked "
+                                 f"required: true.")
                     if prm.get("in") and not prm.get("schema") and "$ref" not in prm:
                         warn(f"{label} parameter '{prm.get('name')}' has no schema.")
             missing = path_params - declared
             if missing and "<ref>" not in declared:
-                err(f"{label} uses {{{', '.join(sorted(missing))}}} in the path but does not "
-                    f"declare {'it' if len(missing)==1 else 'them'} as a parameter.")
+                warn(f"{label} uses {{{', '.join(sorted(missing))}}} in the path but does not "
+                     f"declare {'it' if len(missing)==1 else 'them'} as a parameter. The tool "
+                     f"deploys, but the agent is never given the argument, so every call to it "
+                     f"hits a literal {{placeholder}} in the URL and fails at runtime.")
 
             # bodies on mutating verbs
             if m in ("post", "put", "patch") and not op.get("requestBody"):
                 warn(f"{label} is a {m.upper()} with no requestBody.")
 
             if not op.get("responses"):
-                err(f"{label} declares no responses.")
+                warn(f"{label} declares no responses.")
 
     # 6. every $ref resolves
     refs = []
     collect_refs(spec, refs)
     for r in sorted(set(refs)):
         if not resolve(spec, r):
-            err(f"Unresolvable $ref: '{r}'.")
+            warn(f"Unresolvable $ref: '{r}'. mcp-link resolves refs non-recursively, so a "
+                 f"dangling ref nested inside a response usually passes unnoticed; one at the "
+                 f"top level can fail the parse.")
 
     # 7. security
     schemes = ((spec.get("components") or {}).get("securitySchemes") or {})
@@ -184,8 +214,9 @@ def main(path):
         warn("No components.securitySchemes. If the API needs auth, declare it so Airia "
              "knows which credential to attach.")
     for u in used - set(schemes):
-        err(f"security references scheme '{u}' which is not defined in "
-            f"components.securitySchemes.")
+        warn(f"security references scheme '{u}' which is not defined in "
+             f"components.securitySchemes. mcp-link never reads either field - Airia supplies "
+             f"auth from the credential you attach - so this is documentation only.")
     for s in set(schemes) - used:
         warn(f"securityScheme '{s}' is defined but never applied.")
 
@@ -203,14 +234,15 @@ def main(path):
     # ------------------------------------------------------------------ report
     print(f"\nSpec:       {path}")
     print(f"Title:      {info.get('title','(none)')}  v{info.get('version','?')}")
-    print(f"Base URL:   {servers[0]['url'] if servers else '(none)'}")
+    print(f"Base URL:   {servers[0]['url'] if servers else '(none in spec - Airia supplies it)'}")
     print(f"Operations: {len(ops)}  ->  {len(ops)} MCP tools\n")
 
-    for tag, items, sym in (("ERROR", ERRORS, "x"), ("WARN", WARNINGS, "!")):
-        for i in items:
-            print(f"  [{sym}] {tag}: {i}")
-    if not ERRORS and not WARNINGS:
-        print("  No errors, no warnings.")
+    for b in BLOCKERS:
+        print(f"  [x] BLOCKER: {b}")
+    for q in QUALITY:
+        print(f"  [!] QUALITY: {q}")
+    if not BLOCKERS and not QUALITY:
+        print("  Nothing to report.")
 
     if destructive or egress:
         print("\n  For the security review:")
@@ -220,12 +252,17 @@ def main(path):
             print(f"    DATA EGRESS   {e}")
 
     print()
-    if ERRORS:
-        print(f"RESULT: INVALID - {len(ERRORS)} error(s), {len(WARNINGS)} warning(s).")
-        print("Fix the errors before handing this spec to the security team.\n")
+    if BLOCKERS:
+        print(f"RESULT: WILL NOT DEPLOY - {len(BLOCKERS)} blocker(s), "
+              f"{len(QUALITY)} quality issue(s).")
         return 1
-    print(f"RESULT: VALID - 0 errors, {len(WARNINGS)} warning(s).")
-    print("Safe to hand to the security team for the permit/deny review.\n")
+    if QUALITY:
+        print(f"RESULT: DEPLOYS, BUT LOW QUALITY - 0 blockers, {len(QUALITY)} quality issue(s).")
+        print("Airia will verify this spec and build tools from it. That is not the same as")
+        print("the tools being good. Fix the quality issues, then hand it to the reviewer.")
+        return 0
+    print("RESULT: CLEAN - 0 blockers, 0 quality issues.")
+    print("Safe to register, and ready for the permit/deny review.\n")
     return 0
 
 

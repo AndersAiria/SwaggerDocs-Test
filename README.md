@@ -11,7 +11,8 @@ publishes a static document; Airia runs the server.
 | File | Purpose |
 |---|---|
 | `sony-ci-openapi.yaml` | A curated 14-operation subset of the Sony Ci Media Cloud REST API |
-| `sony-ci-openapi-BROKEN.yaml` | The same spec with eight deliberate faults, for demonstrating validation |
+| `sony-ci-openapi-SLOPPY.yaml` | The same spec with eight deliberate faults. Airia verifies it anyway |
+| `sony-ci-openapi-FATAL.yaml` | Unparseable YAML — one of the few things that genuinely fails |
 | `validate_openapi.py` | Pre-flight validator — run before registering a spec |
 
 ## Raw URLs
@@ -61,16 +62,28 @@ pip install pyyaml
 python3 validate_openapi.py sony-ci-openapi.yaml
 ```
 
-Checks that the document parses, is OpenAPI 3.x, declares an absolute `servers` URL, gives every
-operation a unique and well-formed `operationId` and a usable `description`, declares every path
-parameter, resolves every `$ref`, and defines the security schemes it references. It then groups
-the destructive and data-egress operations for a security review.
-
-Exit code `0` means valid. Compare:
+Findings are split into **blockers** (the converter cannot build a server) and **quality**
+issues (it will happily build one, but the resulting tools are worse for it). Most real faults
+are quality issues:
 
 ```bash
-python3 validate_openapi.py sony-ci-openapi-BROKEN.yaml   # 8 errors, exit 1
+python3 validate_openapi.py sony-ci-openapi.yaml         # 0 blockers, 1 quality note
+python3 validate_openapi.py sony-ci-openapi-SLOPPY.yaml  # 0 blockers, 12 quality issues
+python3 validate_openapi.py sony-ci-openapi-FATAL.yaml   # does not parse, exit 1
 ```
+
+The converter behind Airia's OpenAPI servers is deliberately permissive: it does not check the
+spec version, does not require `operationId`, does not detect duplicates, does not cross-check
+path parameters against the path template, and never reads `securitySchemes`. It also takes the
+upstream base URL from Airia's form rather than the spec's `servers` block.
+
+So a spec can be wrong by OpenAPI's rules and still verify and produce working tools. Passing
+verification is a low bar. It is not a substitute for reading the generated tool list.
+
+One consequence worth knowing: the tool **name** is generated from the HTTP method and path,
+not from `operationId`. The `operationId`, `summary` and `description` are concatenated into the
+tool **description**. Descriptions are therefore the field that determines whether an agent uses
+the API well.
 
 ## Notes for registering a spec in Airia
 

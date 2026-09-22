@@ -1,8 +1,18 @@
-# DEMO ARTIFACT - this file is deliberately broken.
+# DEMO ARTIFACT - this file is sloppy, and Airia accepts it anyway.
 #
 # Every fault below is one an LLM actually produces when asked to turn API
-# documentation into an OpenAPI spec. Run validate_openapi.py against this file to
-# show what the pre-flight check catches before the security team ever sees it.
+# documentation into an OpenAPI spec: a Swagger 2.0 version header, no servers
+# block, a duplicate operationId, a missing operationId, an undeclared path
+# parameter, a dangling $ref, and a security scheme that is never defined.
+#
+# Airia's spec probe VERIFIES this file and discovers tools from it.
+#
+# That is the point of the demo. mcp-link, the converter behind Airia's OpenAPI
+# servers, ignores every one of these faults. Verification proves a spec is
+# fetchable and parseable. It does not prove the tools are usable or safe - that
+# is what the human review of the tool list is for.
+#
+# See FINDINGS-mcp-link-behaviour.md for the source evidence.
 openapi: "2.0"
 
 info:
