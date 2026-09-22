@@ -1,0 +1,36 @@
+# VIDEO DEMO 3 of 3 - genuinely cannot be validated.
+#
+# The converter behind Airia's OpenAPI servers is extremely permissive. It ignores the
+# spec version, treats operationId as optional, and never reads securitySchemes. Almost
+# nothing about a badly written spec will actually stop it.
+#
+# What DOES stop it is the YAML parse itself, which happens before anything else. This
+# file has two syntax faults:
+#
+#   line 20  a quoted string that is never closed
+#   line 27  a flow sequence "[" that is never closed
+#
+# Expected in Airia: verification fails at the parse stage, and Save stays disabled.
+openapi: 3.0.3
+info:
+  title: "Sony Ci Broken
+  version: "1.0.0"
+servers:
+  - url: https://api.cimediacloud.com
+paths:
+  /workspaces:
+    get:
+      operationId: listUserWorkspaces
+      summary: List the Ci workspaces the user can access
+      description: Returns the workspaces available to the caller.
+      parameters: [ { name: limit, in: query, schema: { type: integer }
+      responses:
+        '200':
+          description: A page of workspaces.
+  /assets/{assetId}:
+    get:
+      operationId: getAssetDetails
+      summary: Get the metadata for one asset
+      responses:
+        '200':
+          description: The asset record.

@@ -1,0 +1,178 @@
+# VIDEO DEMO 1 of 3 - the golden path.
+#
+# Six read-only Sony Ci operations. Nothing destructive, no personal data, no data
+# egress. Every path parameter is declared, every operation carries a description
+# written for an agent, and the title is short so generated tool names stay well
+# inside the 64-character limit.
+#
+# Expected in Airia: verification passes, 6 tools discovered, no security warnings.
+openapi: 3.0.3
+info:
+  title: Sony Ci Read
+  version: "1.0.0"
+  description: >
+    Read-only access to Sony Ci Media Cloud. This specification exposes retrieval and
+    search operations only. It contains no operation that modifies, removes or exports
+    media.
+servers:
+  - url: https://api.cimediacloud.com
+security:
+  - ciBearer: []
+components:
+  securitySchemes:
+    ciBearer:
+      type: http
+      scheme: bearer
+      description: Ci OAuth 2.0 access token, supplied by the platform. The agent never sees it.
+  responses:
+    Unauthorized:
+      description: Access token missing, expired or invalid.
+    NotFound:
+      description: The requested resource was not found.
+paths:
+
+  /workspaces:
+    get:
+      operationId: listUserWorkspaces
+      summary: List the Ci workspaces the user can access
+      description: >
+        Returns the workspaces available to the caller with their id, name and storage
+        figures. Call this first to turn a workspace name a person mentions into the
+        workspaceId that the other operations require.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          required: false
+          schema: { type: integer, default: 50, maximum: 50 }
+        - name: offset
+          in: query
+          description: Number of records to skip, for paging.
+          required: false
+          schema: { type: integer, default: 0 }
+      responses:
+        '200': { description: A page of workspaces. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /workspaces/{workspaceId}/contents:
+    get:
+      operationId: listWorkspaceContents
+      summary: List the assets and folders inside a workspace
+      description: >
+        Returns one page of the immediate contents of a workspace. Use this when the
+        person is browsing. When they are looking for something specific by name, use
+        searchWorkspaceContents instead.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          required: false
+          schema: { type: integer, default: 50, maximum: 50 }
+        - name: offset
+          in: query
+          description: Number of records to skip, for paging.
+          required: false
+          schema: { type: integer, default: 0 }
+      responses:
+        '200': { description: A page of workspace contents. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workspaces/{workspaceId}/search:
+    get:
+      operationId: searchWorkspaceContents
+      summary: Search a workspace for assets and folders by keyword
+      description: >
+        Full text search scoped to a single workspace. This is the primary discovery
+        tool. Use it to turn a description of a clip, promo or package into concrete
+        asset identifiers that the other operations can act on.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace to search within.
+          schema: { type: string }
+        - name: query
+          in: query
+          required: true
+          description: The search term.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          required: false
+          schema: { type: integer, default: 50, maximum: 50 }
+      responses:
+        '200': { description: Matching assets and folders. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}:
+    get:
+      operationId: getAssetDetails
+      summary: Get the full metadata for one asset
+      description: >
+        Returns the name, format, duration, size, creation date and custom metadata for
+        a single asset. Use it after a search to give the person details about a
+        specific result.
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+      responses:
+        '200': { description: The asset record. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}/elements:
+    get:
+      operationId: listAssetElements
+      summary: List the media elements attached to an asset
+      description: >
+        Returns the proxies, thumbnails, captions and other elements associated with an
+        asset. Useful for answering what renditions or caption files exist for a piece
+        of media.
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          required: false
+          schema: { type: integer, default: 50, maximum: 50 }
+      responses:
+        '200': { description: A page of elements. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /assets/{assetId}/logs:
+    get:
+      operationId: listAssetMediaLogs
+      summary: List the media log entries for an asset
+      description: >
+        Returns the time coded media log records for an asset, which are the annotations
+        and markers editors have placed against the timeline. Use it to answer questions
+        about what happens at a given point in a piece of media.
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          required: false
+          schema: { type: integer, default: 50, maximum: 50 }
+      responses:
+        '200': { description: A page of media log records. }
+        '401': { $ref: '#/components/responses/Unauthorized' }

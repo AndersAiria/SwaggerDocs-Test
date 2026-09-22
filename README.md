@@ -6,6 +6,25 @@ Airia's MCP Gateway can turn a hosted OpenAPI spec into a live MCP server: it fe
 YAML, parses it, and presents each operation as a tool an AI agent can call. The customer
 publishes a static document; Airia runs the server.
 
+## video/ — three specs for the recorded walkthrough
+
+| File | Beat | Expected in Airia |
+|---|---|---|
+| `video/sony-ci-read.yaml` | Golden path | Verifies, **6 tools**, no warnings |
+| `video/sony-ci-admin.yaml` | Valid but unsafe | Verifies, **7 tools**, security flags on the destructive, egress and poisoned tools |
+| `video/sony-ci-malformed.yaml` | Genuinely invalid | Fails at the **parse** stage, Save stays disabled |
+
+```
+https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-read.yaml
+https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-admin.yaml
+https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-malformed.yaml
+```
+
+Upstream base URL for all three: `https://api.cimediacloud.com`
+
+`video/sony-ci-admin.yaml` contains a deliberate tool-poisoning sample in one description,
+so that a security scan has something real to detect. It is a demo artifact.
+
 ## Contents
 
 | File | Purpose |
