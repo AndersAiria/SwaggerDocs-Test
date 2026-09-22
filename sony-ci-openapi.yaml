@@ -1,0 +1,438 @@
+openapi: 3.0.3
+info:
+  title: Sony Ci Media Cloud (curated)
+  version: "1.0.0"
+  description: >
+    A deliberately curated subset of the Sony Ci Media Cloud REST API, authored for use
+    as an Airia custom MCP server. The full published API exposes roughly 80 operations;
+    this file exposes 14. Anything not described in this file cannot be seen or called
+    by an agent.
+
+    Source documentation: https://developers.cimediacloud.com/
+servers:
+  - url: https://api.cimediacloud.com
+    description: Sony Ci production API
+
+security:
+  - ciBearer: []
+
+components:
+  securitySchemes:
+    ciBearer:
+      type: http
+      scheme: bearer
+      description: >
+        Ci OAuth 2.0 access token, obtained from POST /oauth2/token. Sent as
+        Authorization: Bearer {token}. Token acquisition is intentionally NOT exposed
+        as a tool - Airia holds the credential, the agent never sees or handles it.
+
+  parameters:
+    limit:
+      name: limit
+      in: query
+      description: Maximum number of records to return.
+      required: false
+      schema: { type: integer, default: 50, maximum: 50 }
+    offset:
+      name: offset
+      in: query
+      description: Number of records to skip, for paging.
+      required: false
+      schema: { type: integer, default: 0 }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code: { type: string, description: Machine readable error code. }
+        message: { type: string, description: Human readable error message. }
+
+    AssetIdList:
+      type: object
+      required: [assetIds]
+      properties:
+        assetIds:
+          type: array
+          description: The unique identifiers of the assets to act on.
+          items: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Access token missing, expired, or invalid.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+paths:
+
+  # ---------------------------------------------------------------- read only
+
+  /workspaces:
+    get:
+      operationId: listUserWorkspaces
+      summary: List the Ci workspaces the authenticated user can access
+      description: >
+        Read-only. Returns the workspaces available to the caller, with id, name and
+        storage figures. Use this first to resolve a workspace name a person mentions
+        into the workspaceId that the other operations require.
+      tags: [workspaces]
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - name: orderBy
+          in: query
+          description: Field to sort by, for example name or createdOn.
+          required: false
+          schema: { type: string }
+        - name: orderDirection
+          in: query
+          description: Sort direction.
+          required: false
+          schema: { type: string, enum: [asc, desc] }
+      responses:
+        '200':
+          description: A page of workspaces.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        createdOn: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /workspaces/{workspaceId}/contents:
+    get:
+      operationId: listWorkspaceContents
+      summary: List the assets and folders inside a workspace
+      description: >
+        Read-only. Returns one page of the immediate contents of a workspace. Prefer
+        searchWorkspaceContents when the person is looking for something by name rather
+        than browsing.
+      tags: [workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace.
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: Restrict results to assets, folders, or both.
+          required: false
+          schema: { type: string, enum: [all, asset, folder] }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: A page of workspace contents.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workspaces/{workspaceId}/search:
+    get:
+      operationId: searchWorkspaceContents
+      summary: Search a workspace for assets and folders by keyword
+      description: >
+        Read-only. Full text search scoped to a single workspace. This is the primary
+        discovery tool - use it to turn a description of a clip, promo or package into
+        concrete asset ids.
+      tags: [search]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace to search within.
+          schema: { type: string }
+        - name: query
+          in: query
+          required: true
+          description: The search term.
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: Restrict results to assets, folders, or both.
+          required: false
+          schema: { type: string, enum: [all, asset, folder] }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Matching assets and folders.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}:
+    get:
+      operationId: getAssetDetails
+      summary: Get the full metadata for one asset
+      description: >
+        Read-only. Returns name, format, duration, size, created date and custom
+        metadata for a single asset.
+      tags: [assets]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The asset record.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    put:
+      operationId: updateAsset
+      summary: Update an asset's name or description
+      description: >
+        WRITE. Modifies an existing asset record in place. Only the fields supplied are
+        changed. Does not move, trash or delete the asset.
+      tags: [assets]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset to update.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, description: New display name for the asset. }
+                description: { type: string, description: New description for the asset. }
+      responses:
+        '200':
+          description: The updated asset record.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    delete:
+      operationId: deleteAsset
+      summary: Permanently delete a single asset
+      description: >
+        DESTRUCTIVE AND IRREVERSIBLE. Permanently removes the asset and its media from
+        Ci. This does not move the asset to the trash bin - the media is gone. Do not
+        call without explicit human confirmation naming the asset.
+      tags: [assets]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset to delete permanently.
+          schema: { type: string }
+      responses:
+        '204':
+          description: The asset was deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}/elements:
+    get:
+      operationId: listAssetElements
+      summary: List the media elements attached to an asset
+      description: >
+        Read-only. Returns the proxies, thumbnails, captions and other elements
+        associated with an asset.
+      tags: [assets]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: A page of elements.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /assets/{assetId}/logs:
+    get:
+      operationId: listAssetMediaLogs
+      summary: List the media log entries for an asset
+      description: >
+        Read-only. Returns time-coded media log records - the annotations and markers
+        editors have placed against the asset timeline.
+      tags: [assets]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: A page of media log records.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --------------------------------------------- read, but carries data egress
+
+  /assets/{assetId}/download:
+    get:
+      operationId: getAssetDownloadUrl
+      summary: Generate a time-limited HTTP download URL for an asset's master media
+      description: >
+        DATA EGRESS. Returns a signed, time-limited URL that anyone holding it can use
+        to download the full resolution master file, without further authentication.
+        Treat the returned URL as sensitive - it leaves the Ci permission boundary once
+        it is shared.
+      tags: [download]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset to download.
+          schema: { type: string }
+        - name: downloadExpirationDate
+          in: query
+          description: >
+            ISO 8601 timestamp after which the generated URL stops working. Always set
+            this to the shortest workable window.
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: An object containing the signed download location.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location: { type: string, description: The signed download URL. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workspaces/{workspaceId}/members:
+    get:
+      operationId: getWorkspaceMembers
+      summary: List the people who are members of a workspace
+      description: >
+        Read-only, returns PERSONAL DATA. Lists workspace members including their names
+        and email addresses. Only call when the person has asked about workspace access
+        or membership.
+      tags: [workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The workspace membership list.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------------- write
+
+  /assets/{assetId}/metadata/:
+    post:
+      operationId: addAssetMetadata
+      summary: Add custom metadata fields to an asset
+      description: >
+        WRITE. Attaches custom metadata key and value pairs to an asset. Existing
+        fields with the same name are overwritten.
+      tags: [metadata]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Metadata field names and values to attach to the asset.
+              additionalProperties: true
+      responses:
+        '200':
+          description: The metadata was attached.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------- destructive
+
+  /assets/trash:
+    post:
+      operationId: trashMultipleAssets
+      summary: Move one or more assets to the workspace trash bin
+      description: >
+        DESTRUCTIVE, BUT RECOVERABLE. Moves the named assets to the trash bin, where
+        they stop appearing in normal listings. Assets can be recovered until the trash
+        is purged. Confirm the asset list with a human before calling.
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetIdList' }
+      responses:
+        '200':
+          description: Per-asset result of the trash operation.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /workspaces/{workspaceId}/purgetrash:
+    post:
+      operationId: purgeWorkspaceTrash
+      summary: Permanently destroy every item in a workspace trash bin
+      description: >
+        DESTRUCTIVE AND IRREVERSIBLE, BULK. Permanently deletes ALL items currently in
+        the workspace trash bin. There is no recovery and no per-item confirmation -
+        one call can destroy an unbounded amount of media. Requires purge trash
+        privilege on the workspace.
+      tags: [workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace whose trash is purged.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The trash bin was purged.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /workspaces/{workspaceId}:
+    delete:
+      operationId: deleteWorkspace
+      summary: Delete an entire workspace and everything in it
+      description: >
+        DESTRUCTIVE AND IRREVERSIBLE, HIGHEST BLAST RADIUS. Deletes the workspace along
+        with all assets, folders and membership it contains. Requires network
+        administrator rights. This operation is included in this specification so that
+        reviewers can see it exists, and is expected to be denied at the gateway.
+      tags: [workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: The unique identifier of the workspace to delete.
+          schema: { type: string }
+      responses:
+        '204':
+          description: The workspace was deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
