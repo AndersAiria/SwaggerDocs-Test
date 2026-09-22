@@ -1,4 +1,4 @@
-# VIDEO DEMO 3 of 3 - genuinely cannot be validated.
+# VIDEO DEMO 2 of 2 - genuinely cannot be validated.
 #
 # The converter behind Airia's OpenAPI servers is extremely permissive. It ignores the
 # spec version, treats operationId as optional, and never reads securitySchemes. Almost

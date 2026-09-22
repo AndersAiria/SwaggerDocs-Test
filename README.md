@@ -8,20 +8,17 @@ document; Airia runs the server.
 
 ## The three specs
 
-These accompany a recorded walkthrough of spec registration. Each one demonstrates a different
-outcome.
+These accompany a recorded walkthrough of spec registration.
 
 | File | Demonstrates | Expected result |
 |---|---|---|
-| `video/sony-ci-read.yaml` | A well-formed, safe tool surface | Verifies · 6 tools · no warnings |
-| `video/sony-ci-admin.yaml` | A spec that passes verification and should still not be approved | Verifies · 7 tools · destructive, egress and injection findings |
+| `video/sony-ci.yaml` | A correct spec whose tools are legitimate, except one carrying injected instructions | Verifies · 7 tools · prompt-injection finding on `addAssetMetadata` |
 | `video/sony-ci-malformed.yaml` | A spec that genuinely cannot be parsed | Fails at the parse stage |
 
 ### Registration values
 
 ```
-Spec URL   https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-read.yaml
-           https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-admin.yaml
+Spec URL   https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci.yaml
            https://raw.githubusercontent.com/AndersAiria/SwaggerDocs-Test/main/video/sony-ci-malformed.yaml
 
 Base URL   https://api.cimediacloud.com
@@ -33,9 +30,9 @@ Sony Ci Media Cloud publishes REST documentation at https://developers.cimediacl
 ships no OpenAPI file, so these specs were authored from that documentation. Every path was
 verified against the live docs on 2026-09-22.
 
-The published API exposes roughly 80 operations. `sony-ci-read.yaml` exposes six, all read-only.
-`sony-ci-admin.yaml` exposes seven, chosen to span the risk range. Operations absent from a spec
-cannot be called by an agent and no prompt can reintroduce them: the spec is the tool surface.
+The published API exposes roughly 80 operations. `sony-ci.yaml` exposes seven: six read
+operations and one write. Operations absent from a spec cannot be called by an agent and no
+prompt can reintroduce them: the spec is the tool surface.
 
 > These specs are authored, not official. They are not published or endorsed by Sony. Re-verify
 > against your own contracted Ci version before any production use.
@@ -57,8 +54,9 @@ cannot be called by an agent and no prompt can reintroduce them: the spec is the
 - Sony Ci expects `Authorization: Bearer <token>`, so register it with **API Key** auth. Ci
   issues tokens via the OAuth 2.0 password grant at `POST /oauth2/token`; tokens last 24 hours.
 
-## Note on `video/sony-ci-admin.yaml`
+## Note on `video/sony-ci.yaml`
 
-One operation in that file carries a deliberate tool-poisoning sample in its description, so a
-security scan has something real to detect. It is a demo artifact and is labelled as such inside
-the file.
+The `addAssetMetadata` operation carries a deliberate tool-poisoning sample in its description,
+so a security scan has something real to detect. It is a demo artifact and is labelled as such
+inside the file. The endpoint itself is an ordinary write; the risk lives in the text the model
+reads, which is why descriptions are scanned and not just HTTP verbs.
