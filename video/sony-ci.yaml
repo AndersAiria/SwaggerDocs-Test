@@ -41,6 +41,12 @@ paths:
   /workspaces:
     get:
       operationId: listUserWorkspaces
+      x-mcp-annotations:
+        title: "List workspaces"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: List the Ci workspaces the user can access
       description: >
         Returns the workspaces available to the caller with their id, name and storage
@@ -64,6 +70,12 @@ paths:
   /workspaces/{workspaceId}/contents:
     get:
       operationId: listWorkspaceContents
+      x-mcp-annotations:
+        title: "Browse workspace"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: List the assets and folders inside a workspace
       description: >
         Returns one page of the immediate contents of a workspace. Use this when the
@@ -93,6 +105,12 @@ paths:
   /workspaces/{workspaceId}/search:
     get:
       operationId: searchWorkspaceContents
+      x-mcp-annotations:
+        title: "Search media"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: Search a workspace for assets and folders by keyword
       description: >
         Full text search scoped to a single workspace. This is the primary discovery
@@ -122,6 +140,12 @@ paths:
   /assets/{assetId}:
     get:
       operationId: getAssetDetails
+      x-mcp-annotations:
+        title: "Get asset details"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: Get the full metadata for one asset
       description: >
         Returns the name, format, duration, size, creation date and custom metadata for
@@ -141,6 +165,12 @@ paths:
   /assets/{assetId}/elements:
     get:
       operationId: listAssetElements
+      x-mcp-annotations:
+        title: "List asset elements"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: List the media elements attached to an asset
       description: >
         Returns the proxies, thumbnails, captions and other elements associated with an
@@ -164,6 +194,12 @@ paths:
   /assets/{assetId}/logs:
     get:
       operationId: listAssetMediaLogs
+      x-mcp-annotations:
+        title: "List media logs"
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true
       summary: List the media log entries for an asset
       description: >
         Returns the time coded media log records for an asset, which are the annotations
@@ -187,6 +223,12 @@ paths:
   /assets/{assetId}/metadata/:
     post:
       operationId: addAssetMetadata
+      x-mcp-annotations:
+        title: "Attach metadata"
+        readOnlyHint: false
+        destructiveHint: false
+        idempotentHint: false
+        openWorldHint: true
       summary: Attach descriptive metadata fields to an asset
       description: >
         Attaches custom metadata key and value pairs to an asset, for example a campaign
@@ -222,5 +264,37 @@ paths:
                   description: Campaign or project code this asset belongs to.
       responses:
         '200': { description: The metadata was attached. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}/trash:
+    post:
+      operationId: trashAsset
+      x-mcp-annotations:
+        title: "Move asset to trash"
+        readOnlyHint: false
+        destructiveHint: true
+        idempotentHint: true
+        openWorldHint: true
+      summary: Move a single asset to the workspace trash bin
+      description: >
+        Moves one asset to the workspace trash bin, where it stops appearing in normal
+        listings. The asset can be restored until the trash bin is purged, so this is
+        reversible. Confirm the specific asset with the person before calling it.
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: The unique identifier of the asset to move to the trash bin.
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: No body fields are required for this operation.
+      responses:
+        '200': { description: The asset was moved to the trash bin. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }

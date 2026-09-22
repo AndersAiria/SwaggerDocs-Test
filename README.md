@@ -12,7 +12,7 @@ These accompany a recorded walkthrough of spec registration.
 
 | File | Demonstrates | Expected result |
 |---|---|---|
-| `video/sony-ci.yaml` | A correct spec whose tools are legitimate, except one carrying injected instructions | Verifies · 7 tools · prompt-injection finding on `addAssetMetadata` |
+| `video/sony-ci.yaml` | A correct spec, annotated with MCP tool hints, whose tools are legitimate except one carrying injected instructions | Verifies · 8 tools · prompt-injection finding on `addAssetMetadata` |
 | `video/sony-ci-malformed.yaml` | A spec that genuinely cannot be parsed | Fails at the parse stage |
 
 ### Registration values
@@ -30,8 +30,8 @@ Sony Ci Media Cloud publishes REST documentation at https://developers.cimediacl
 ships no OpenAPI file, so these specs were authored from that documentation. Every path was
 verified against the live docs on 2026-09-22.
 
-The published API exposes roughly 80 operations. `sony-ci.yaml` exposes seven: six read
-operations and one write. Operations absent from a spec cannot be called by an agent and no
+The published API exposes roughly 80 operations. `sony-ci.yaml` exposes eight: six read
+operations, one write, and one reversible move-to-trash. Operations absent from a spec cannot be called by an agent and no
 prompt can reintroduce them: the spec is the tool surface.
 
 > These specs are authored, not official. They are not published or endorsed by Sony. Re-verify
@@ -48,6 +48,11 @@ prompt can reintroduce them: the spec is the tool surface.
 - **Keep `info.title` short.** It becomes the tool-name prefix, and generated names must match
   `^[a-zA-Z0-9_-]{1,64}$`. A long title plus a descriptive `operationId` runs past the limit.
   `x-mcp-tool-prefix` overrides the prefix when the title needs to stay long.
+- **Annotate every operation with `x-mcp-annotations`.** `readOnlyHint`, `destructiveHint`,
+  `idempotentHint`, `openWorldHint` and an optional human-readable `title` are parsed and
+  attached to the served tool definition. Omitted fields are absent rather than false, so set
+  the ones that matter. Note these are declared by whoever writes the spec, not derived from
+  the API, so a reviewer should treat them as a claim rather than a guarantee.
 - **Descriptions are what the model reasons over.** They carry more weight than any other field
   in deciding whether a tool gets used correctly.
 - **The authentication method is locked at creation.** Choose it deliberately the first time.
